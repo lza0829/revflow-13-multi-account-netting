@@ -58,12 +58,63 @@ CREATE TABLE IF NOT EXISTS verify_reports (
   detail_json TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS netting_sessions (
+  id INTEGER PRIMARY KEY,
+  status TEXT NOT NULL,
+  note TEXT NOT NULL DEFAULT '',
+  failure_reason TEXT,
+  account_count INTEGER NOT NULL DEFAULT 0,
+  entry_count INTEGER NOT NULL DEFAULT 0,
+  net_total_cents INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  finished_at TEXT
+);
+CREATE TABLE IF NOT EXISTS netting_session_accounts (
+  id INTEGER PRIMARY KEY,
+  session_id INTEGER NOT NULL REFERENCES netting_sessions(id),
+  account_id INTEGER NOT NULL REFERENCES accounts(id),
+  account_code TEXT NOT NULL,
+  account_name TEXT NOT NULL,
+  before_balance_cents INTEGER NOT NULL,
+  net_cents INTEGER NOT NULL,
+  after_balance_cents INTEGER NOT NULL,
+  applied INTEGER NOT NULL DEFAULT 0,
+  UNIQUE(session_id, account_id)
+);
+CREATE TABLE IF NOT EXISTS netting_session_entries (
+  id INTEGER PRIMARY KEY,
+  session_id INTEGER NOT NULL REFERENCES netting_sessions(id),
+  entry_id INTEGER NOT NULL REFERENCES ledger_entries(id),
+  entry_key TEXT NOT NULL,
+  account_id INTEGER NOT NULL REFERENCES accounts(id),
+  kind TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  target_entry_key TEXT,
+  signed_cents INTEGER NOT NULL,
+  UNIQUE(session_id, entry_id)
+);
 """
+
+# 旧库补列：底座只有 settle_runs，本轮新增轧差会话指针列
+MIGRATIONS = (
+    "ALTER TABLE ledger_entries ADD COLUMN netting_session_id INTEGER",
+    "ALTER TABLE accounts ADD COLUMN last_netting_session_id INTEGER",
+)
+
+
+def _migrate(conn) -> None:
+    for stmt in MIGRATIONS:
+        try:
+            conn.execute(stmt)
+        except Exception as exc:  # sqlite3.OperationalError: duplicate column
+            if "duplicate column" not in str(exc).lower():
+                raise
 
 
 def init_db() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
         n = conn.execute("SELECT COUNT(*) AS c FROM accounts").fetchone()["c"]
         if n:
             return

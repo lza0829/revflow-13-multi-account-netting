@@ -199,8 +199,16 @@ def run_settle() -> dict:
 
         net_total = 0
         for acc_id, net in account_net.items():
+            # 增量落账：账户余额可能已含历轮归并 / 多账户轧差会话的净额；
+            # 余额被本轮改写后，账户的「最近轧差会话」指针不再代表当前余额来源
             conn.execute(
-                "UPDATE accounts SET balance_cents = ?, last_settle_run_id = ? WHERE id = ?",
+                """
+                UPDATE accounts
+                SET balance_cents = balance_cents + ?,
+                    last_settle_run_id = ?,
+                    last_netting_session_id = NULL
+                WHERE id = ?
+                """,
                 (net, run_id, acc_id),
             )
             net_total += net

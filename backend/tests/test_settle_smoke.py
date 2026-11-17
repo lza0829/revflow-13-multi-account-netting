@@ -6,13 +6,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "backend"))
-os.environ["DATA_DIR"] = str(ROOT / "backend" / "data_test")
-os.environ["FIXTURES_DIR"] = str(ROOT / "fixtures")
-
-db_path = Path(os.environ["DATA_DIR"]) / "app.db"
-if db_path.exists():
-    db_path.unlink()
 
 from app.main import app  # noqa: E402
 
